@@ -190,11 +190,12 @@ void Chip8::Decode(uint16_t &instruction)
         for(unsigned i = 0; i < n; i++)
         {
             // TODO: Find another way to check if bit flipped from 1 to 0
+
             for(int j = 0; j < 8; j++)
-                if((screen[coordY+j % 32][coordX % 64] & (unsigned char)pow(2, j)) && !((screen[coordY+j % 32][coordX]^bytes[j % 64]) & (unsigned char)pow(2, j)))
+                if((screen[(coordY+j) % 32][coordX % 64] & (unsigned char)pow(2, j)) && !((screen[(coordY+j) % 32][coordX]^bytes[j % 64]) & (unsigned char)pow(2, j)))
                     registers[0xF] |= 1;
 
-            screen[coordY+i % 32][coordX % 64] ^= bytes[i];
+            screen[(coordY+i) % 32][coordX % 64] ^= bytes[i];
         }
     } else if(leading == 0xE)
     {
