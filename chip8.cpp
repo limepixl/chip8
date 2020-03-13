@@ -3,7 +3,7 @@
 #include <ctime>
 #include <cmath>
 
-Chip8::Chip8(sf::RenderWindow& window) : window(window)
+Chip8::Chip8(sf::RenderWindow* window, const char* gamePath) : window(window)
 {
     // Hexadecimal digits in interpreter memory 5*8 (5B)
     uint8_t digits[] = {
@@ -29,14 +29,57 @@ Chip8::Chip8(sf::RenderWindow& window) : window(window)
     for(int i = 0; i < 80; i++)
         memory[i] = digits[i];
 
+    // Initialize memory to 0
+    for(int i = 80; i < 4096; i++)
+        memory[i] = 0;
+
+    // Reset registers and stack
+    for(int i = 0; i < 16; i++)
+    {
+        registers[i] = 0;
+        stack[i] = 0;
+    }
+
+    PC = 0x200;
+    I = 0;
+    SP = 0;
+
+    // Clear display
+    for(int i = 0; i < 32; i++)
+    for(int j = 0; j < 64; j++)
+        screen[i][j] = 0;
+
     // Seed random number generation
     srand(time(nullptr));
+
+    // Load game from file
+    FILE* game = fopen(gamePath, "rb");
+    if(game == nullptr)
+    {
+        printf("Failed to load game from file!");
+        exit(-1);
+    }
+
+    fseek(game, 0L, SEEK_END);
+    unsigned long size = ftell(game);
+    rewind(game);
+
+
+    uint8_t buffer[size];
+    fread(buffer, 1, size, game);
+    fclose(game);
+
+    // Store game into memory
+    for(int i = 0; i < size; i++)
+        memory[i + 0x200] = buffer[i];
 }
 
 // TODO: Possibly move to switch case
 void Chip8::Decode(uint16_t &instruction)
 {
-    unsigned int leading = instruction & 0xF000;
+    unsigned int leading = (instruction & 0xF000) >> 12;
+    unsigned int regX = (instruction & 0x0F00) >> 8;
+    unsigned int regY = (instruction & 0x00F0) >> 4;
     if(leading == 0)
     {
         unsigned int last = instruction & 0x000F;
@@ -63,37 +106,28 @@ void Chip8::Decode(uint16_t &instruction)
         PC = address;
     } else if(leading == 3) // Skip ==
     {
-        unsigned int reg = instruction & 0x0F00;
         uint8_t kk = instruction & 0x00FF;
-        if(registers[reg] == kk)
+        if(registers[regX] == kk)
             PC+=2;
     } else if(leading == 4) // Skip !=
     {
-        unsigned int reg = instruction & 0x0F00;
         uint8_t kk = instruction & 0x00FF;
-        if(registers[reg] != kk)
+        if(registers[regX] != kk)
             PC+=2;
     } else if(leading == 5) // Skip == registers
     {
-        unsigned int regX = instruction & 0x0F00;
-        unsigned int regY = instruction & 0x00F0;
         if(registers[regX] == registers[regY])
             PC+=2;
     } else if(leading == 6) // Set Vx = kk
     {
-        unsigned int reg = instruction & 0x0F00;
         uint8_t kk = instruction & 0x00FF;
-        registers[reg] = kk;
+        registers[regX] = kk;
     } else if(leading == 7) // Vx += kk
     {
-        unsigned int reg = instruction & 0x0F00;
         uint8_t kk = instruction & 0x00FF;
-        registers[reg] += kk;
+        registers[regX] += kk;
     } else if(leading == 8)
     {
-        unsigned int regX = instruction & 0x0F00;
-        unsigned int regY = instruction & 0x00F0;
-
         unsigned int subtype = instruction & 0x000F;
         if(subtype == 0)    // Vx = Vy
             registers[regX] = registers[regY];
@@ -126,8 +160,6 @@ void Chip8::Decode(uint16_t &instruction)
         }
     } else if(leading == 9) // Skip != registers
     {
-        unsigned int regX = instruction & 0x0F00;
-        unsigned int regY = instruction & 0x00F0;
         if(registers[regX] != registers[regY])
             PC+=2;
     } else if(leading == 0xA) // I = nnn
@@ -142,8 +174,7 @@ void Chip8::Decode(uint16_t &instruction)
     {
         uint8_t random = (unsigned int)rand() % 256;
         uint8_t kk = instruction & 0x00FF;
-        unsigned int reg = instruction & 0x0F00;
-        registers[reg] = random & kk;
+        registers[regX] = random & kk;
     } else if(leading == 0xD) // Draw
     {
         unsigned int n = instruction & 0x000F;
@@ -153,64 +184,96 @@ void Chip8::Decode(uint16_t &instruction)
         for(uint16_t i = I; i < n; i++)
             bytes[bCount++] = memory[i];
 
-        unsigned int regX = instruction & 0x0F00;
-        unsigned int regY = instruction & 0x00F0;
         uint8_t coordX = registers[regX];
         uint8_t coordY = registers[regY];
 
         for(unsigned i = 0; i < n; i++)
         {
             // TODO: Find another way to check if bit flipped from 1 to 0
-            for(int i = 0; i < 8; i++)
-                if((screen[coordY+i][coordX] & (unsigned char)pow(2, i)) && !((screen[coordY+i][coordX]^bytes[i]) & (unsigned char)pow(2, i)))
+            for(int j = 0; j < 8; j++)
+                if((screen[coordY+j % 32][coordX % 64] & (unsigned char)pow(2, j)) && !((screen[coordY+j % 32][coordX]^bytes[j % 64]) & (unsigned char)pow(2, j)))
                     registers[0xF] |= 1;
 
             screen[coordY+i % 32][coordX % 64] ^= bytes[i];
         }
     } else if(leading == 0xE)
     {
-        // TODO: Add keyboard
+        if(keyboard[registers[regX]])
+            PC+=2;
     } else if(leading == 0xF)
     {
         uint8_t lastByte = instruction & 0x00FF;
-        unsigned int reg = instruction & 0x0F00;
         if(lastByte == 0x07)
-            registers[reg] = delayTimer;
-        else if(lastByte == 0x0A)
+            registers[regX] = delayTimer;
+        else if(lastByte == 0x0A)   // Wait for key press
         {
-            // TODO: Add keyboard
+            sf::Event e;
+            while(true)
+            {
+                window->pollEvent(e);
+                if(e.type == sf::Event::KeyPressed)
+                {
+                    if(e.key.code >= sf::Keyboard::A && e.key.code <= sf::Keyboard::F)
+                    {
+                        keyboard[e.key.code + 10] = true;
+                        registers[regX] = e.key.code + 10;
+                        break;
+                    }
+                    else if(e.key.code >= sf::Keyboard::Num0 && e.key.code <= sf::Keyboard::Num9)
+                    {
+                        keyboard[e.key.code - 26] = true;
+                        registers[regX] = e.key.code - 26;
+                        break;
+                    }
+                }
+            }
         } else if(lastByte == 0x15)
-            delayTimer = registers[reg];
+            delayTimer = registers[regX];
         else if(lastByte == 0x18)
-            soundTimer = registers[reg];
+            soundTimer = registers[regX];
         else if(lastByte == 0x1E)
-            I += registers[reg];
+            I += registers[regX];
         else if(lastByte == 0x29)
+            I = memory[5*registers[regX]];
+        else if(lastByte == 0x33)
         {
-            // TODO: What location?
-        } else if(lastByte == 0x33)
-        {
-            unsigned int decimal = registers[reg];
+            unsigned int decimal = registers[regX];
             memory[I] = decimal / 100;
             memory[I+1] = decimal / 10 % 10;
             memory[I+2] = decimal % 10;
-        } else if(lastByte == 0x55) // TODO: Check
+        } else if(lastByte == 0x55)
         {
-            for(unsigned i = 0; i <= reg; i++)
+            for(unsigned i = 0; i <= regX; i++)
                 memory[I+i] = registers[i];
         } else if(lastByte == 0x65)
         {
-            for(unsigned i = 0; i <= reg; i++)
+            for(unsigned i = 0; i <= regX; i++)
                 registers[i] = memory[I+i];
         }
     }
+
+    PC+=2; // Fetch the next instruction
 }
 
+void Chip8::Iterate()
+{
+    uint16_t instruction = memory[PC] << 8 | memory[PC+1];
+    Decode(instruction);
 
+    // Transfer screen to SFML screen
+    sf::Image image;
+    image.create(64, 32);
+    for(int i = 0; i < 32; i++)
+    for(int j = 0; j < 64; j++)
+        if(screen[i][j])
+            image.setPixel(j, i, sf::Color::White);
+        else
+            image.setPixel(j, i, sf::Color::Black);
 
+    sf::Texture tex;
+    tex.loadFromImage(image);
 
-
-
-
-
-
+    sf::Sprite spr(tex);
+    spr.scale(4.0f, 4.0f);
+    window->draw(spr);
+}

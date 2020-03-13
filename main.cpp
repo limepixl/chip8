@@ -1,21 +1,23 @@
-#include <SFML/Graphics.hpp>
-#include <inttypes.h>
+#include "chip8.h"
 
 int main()
 {
-    sf::RenderWindow window(sf::VideoMode(200, 200), "Chip8");
+    sf::RenderWindow window(sf::VideoMode(512, 256, 8), "Chip8");
     window.setFramerateLimit(60);
 
-    while (window.isOpen())
+    Chip8 chip8(&window, "../chip8/Chip8-Games/logo.ch8");
+
+    while(window.isOpen())
     {
-        sf::Event event;
-        while (window.pollEvent(event))
+        sf::Event e;
+        while(window.pollEvent(e))
         {
-            if (event.type == sf::Event::Closed)
+            if(e.type == sf::Event::Closed)
                 window.close();
         }
 
         window.clear();
+        chip8.Iterate();
         window.display();
     }
 

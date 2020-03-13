@@ -4,7 +4,7 @@
 
 struct Chip8
 {
-    sf::RenderWindow& window;
+    sf::RenderWindow* window;
 
     // Monochrome 64x32 screen
     uint8_t screen[32][64];
@@ -32,7 +32,11 @@ struct Chip8
     // Stack
     uint16_t stack[16];
 
-    Chip8(sf::RenderWindow& window);
+    // Keyboard values (0, 1, 2, .., E, F)
+    bool keyboard[16];
+
+    Chip8(sf::RenderWindow* window, const char* gamePath);
 
     void Decode(uint16_t& instruction);
+    void Iterate();
 };
