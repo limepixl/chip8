@@ -77,15 +77,20 @@ Chip8::Chip8(sf::RenderWindow* window, const char* gamePath) : window(window)
     screenImage.create(64, 32);
 }
 
-// TODO: Possibly move to switch case
+// I know, I know. Switch cases are evil.
+// But in this case, they're a bit faster!
 void Chip8::Decode(uint16_t &instruction)
 {
-    unsigned int leading = (instruction & 0xF000) >> 12;
-    unsigned int regX = (instruction & 0x0F00) >> 8;
-    unsigned int regY = (instruction & 0x00F0) >> 4;
-    if(leading == 0)
+    uint8_t leading = (instruction & 0xF000) >> 12;
+    uint8_t regX = (instruction & 0x0F00) >> 8;
+    uint8_t regY = (instruction & 0x00F0) >> 4;
+    uint16_t address = instruction & 0x0FFF;
+
+    switch(leading)
     {
-        unsigned int last = instruction & 0x000F;
+    case 0:
+    {
+        uint8_t last = instruction & 0x000F;
         if(last == 0)   // Screen clear
         {
             for(int i = 0; i < 32; i++)
@@ -103,120 +108,156 @@ void Chip8::Decode(uint16_t &instruction)
             PC = stack[SP];
             SP--;
             PC+=2;
-        } else
-            printf("Unknown instruction! %#06X\n", instruction);
-    } else if(leading == 1) // Jump
-    {
-        uint16_t address = instruction & 0x0FFF;
+        }
+
+        break;
+    }
+    case 1: // Jump
         PC = address;
-    } else if(leading == 2) // Call subroutine
+        break;
+    case 2: // Call subroutine
     {
-        uint16_t address = instruction & 0x0FFF;
         stack[++SP] = PC;
         PC = address;
-    } else if(leading == 3) // Skip ==
+        break;
+    }
+    case 3: // Skip ==
     {
         uint8_t kk = instruction & 0x00FF;
         if(registers[regX] == kk)
             PC+=4;
         else
             PC+=2;
-    } else if(leading == 4) // Skip !=
+        break;
+    }
+    case 4: // Skip !=
     {
         uint8_t kk = instruction & 0x00FF;
         if(registers[regX] != kk)
             PC+=4;
         else
             PC+=2;
-    } else if(leading == 5) // Skip == registers
+        break;
+    }
+    case 5: // Skip == registers
     {
         if(registers[regX] == registers[regY])
             PC+=4;
         else
             PC+=2;
-    } else if(leading == 6) // Set Vx = kk
+        break;
+    }
+    case 6: // Set Vx = kk
     {
         uint8_t kk = instruction & 0x00FF;
         registers[regX] = kk;
         PC+=2;
-    } else if(leading == 7) // Vx += kk
+        break;
+    }
+    case 7: // Vx += kk
     {
         uint8_t kk = instruction & 0x00FF;
         registers[regX] += kk;
         PC+=2;
-    } else if(leading == 8)
+        break;
+    }
+    case 8:
     {
-        unsigned int subtype = instruction & 0x000F;
-        if(subtype == 0)    // Vx = Vy
+        uint8_t subtype = instruction & 0x000F;
+        switch(subtype)
+        {
+        case 0:    // Vx = Vy
         {
             registers[regX] = registers[regY];
             PC+=2;
+            break;
         }
-        else if(subtype == 1) // Vx |= Vy
+        case 1: // Vx |= Vy
         {
             registers[regX] |= registers[regY];
             PC+=2;
+            break;
         }
-        else if(subtype == 2) // Vx &= Vy
+        case 2: // Vx &= Vy
         {
             registers[regX] &= registers[regY];
             PC+=2;
+            break;
         }
-        else if(subtype == 3) // Vx ^= Vy
+        case 3: // Vx ^= Vy
         {
             registers[regX] ^= registers[regY];
             PC+=2;
+            break;
         }
-        else if(subtype == 4) // Vx += Vy
+        case 4: // Vx += Vy
         {
             registers[0xF] = (registers[regX] + registers[regY] > 255);
             registers[regX] += registers[regY];
             PC+=2;
-        } else if(subtype == 5) // Vx -= Vy
+            break;
+        }
+        case 5: // Vx -= Vy
         {
             registers[0xF] = registers[regX] > registers[regY];
             registers[regX] -= registers[regY];
             PC+=2;
-        } else if(subtype == 6) // SHR
+            break;
+        }
+        case 6: // SHR
         {
             registers[0xF] = ((registers[regX] & 0x01) == 1);
             registers[regX] >>= 1;
             PC+=2;
-        } else if(subtype == 7) // SUBN
+            break;
+        }
+        case 7: // SUBN
         {
             registers[0xF] = (registers[regY] > registers[regX]);
             registers[regX] = registers[regY] - registers[regX];
             PC+=2;
-        } else if(subtype == 0xE)   // SHL
+            break;
+        }
+        case 0xE: // SHL
         {
             registers[0xF] = ((registers[regX] & 0x80) == 1);
             registers[regX] <<= 1;
             PC+=2;
+            break;
         }
-    } else if(leading == 9) // Skip != registers
+        }
+    }
+    case 9: // Skip != registers
     {
         if(registers[regX] != registers[regY])
             PC+=4;
         else
             PC+=2;
-    } else if(leading == 0xA) // I = nnn
+        break;
+    }
+    case 0xA: // I = nnn
     {
         uint16_t address = instruction & 0x0FFF;
         I = address;
-
         PC+=2;
-    } else if(leading == 0xB) // Jump nnn + v0
+        break;
+    }
+    case 0xB: // Jump nnn + v0
     {
         uint16_t address = instruction & 0x0FFF;
         PC = registers[0] + address;
-    } else if(leading == 0xC) // rand & kk
+        break;
+    }
+    case 0xC: // rand & kk
     {
         uint8_t random = (unsigned int)rand() % 256;
         uint8_t kk = instruction & 0x00FF;
         registers[regX] = random & kk;
 
         PC+=2;
-    } else if(leading == 0xD) // Draw
+        break;
+    }
+    case 0xD: // Draw
     {
         unsigned int height = instruction & 0x000F;
 
@@ -250,21 +291,28 @@ void Chip8::Decode(uint16_t &instruction)
 
         shouldRedraw = true;
         PC+=2;
-    } else if(leading == 0xE)
+        break;
+    }
+    case 0xE:
     {
         if(keyboard[registers[regX]])
             PC+=4;
         else
             PC+=2;
-    } else if(leading == 0xF)
+        break;
+    }
+    case 0xF:
     {
         uint8_t lastByte = instruction & 0x00FF;
-        if(lastByte == 0x07)
+        switch(lastByte)
+        {
+        case 0x07:
         {
             registers[regX] = delayTimer;
             PC+=2;
+            break;
         }
-        else if(lastByte == 0x0A)   // Wait for key press
+        case 0x0A:   // Wait for key press
         {
             sf::Event e;
             while(true)
@@ -288,27 +336,33 @@ void Chip8::Decode(uint16_t &instruction)
             }
 
             PC+=2;
-        } else if(lastByte == 0x15)
+            break;
+        }
+        case 0x15:
         {
             delayTimer = registers[regX];
             PC+=2;
+            break;
         }
-        else if(lastByte == 0x18)
+        case 0x18:
         {
             soundTimer = registers[regX];
             PC+=2;
+            break;
         }
-        else if(lastByte == 0x1E)
+        case 0x1E:
         {
             I += registers[regX];
             PC+=2;
+            break;
         }
-        else if(lastByte == 0x29)
+        case 0x29:
         {
             I = memory[5*registers[regX]];
             PC+=2;
+            break;
         }
-        else if(lastByte == 0x33)
+        case 0x33:
         {
             unsigned int decimal = registers[regX];
             memory[I] = decimal / 100;
@@ -316,19 +370,27 @@ void Chip8::Decode(uint16_t &instruction)
             memory[I+2] = decimal % 10;
 
             PC+=2;
-        } else if(lastByte == 0x55)
+            break;
+        }
+        case 0x55:
         {
             for(unsigned i = 0; i <= regX; i++)
                 memory[I+i] = registers[i];
 
             PC+=2;
-        } else if(lastByte == 0x65)
+            break;
+        }
+        case 0x65:
         {
             for(unsigned i = 0; i <= regX; i++)
                 registers[i] = memory[I+i];
 
             PC+=2;
+            break;
         }
+        }
+        break;
+    }
     }
 }
 
@@ -336,7 +398,7 @@ void Chip8::Iterate()
 {
     uint16_t instruction = memory[PC] << 8 | memory[PC+1];
 
-    //printf("Decoding instruction: %#6X\n", instruction);
+    printf("Instruction: %#6X\n", instruction);
     Decode(instruction);
 
     // Transfer screen to SFML screen
