@@ -25,13 +25,13 @@ Chip8::Chip8(sf::RenderWindow* window, const char* gamePath) : window(window)
         0xF0, 0x80, 0xF0, 0x80, 0x80    // F
     };
 
-    // Store digits in first 80 bytes of memory
-    for(int i = 0; i < 80; i++)
-        memory[i] = digits[i];
-
     // Initialize memory to 0
     for(int i = 80; i < 4096; i++)
         memory[i] = 0;
+
+    // Store digits in first 80 bytes of memory
+    for(int i = 0; i < 80; i++)
+        memory[i] = digits[i];
 
     // Reset registers and stack
     for(int i = 0; i < 16; i++)
@@ -71,7 +71,7 @@ Chip8::Chip8(sf::RenderWindow* window, const char* gamePath) : window(window)
 
     // Store game into memory
     for(int i = 0; i < size; i++)
-        memory[i + 0x200] = buffer[i];
+        memory[i + 0x200] = (uint8_t)buffer[i];
 }
 
 // TODO: Possibly move to switch case
@@ -85,14 +85,17 @@ void Chip8::Decode(uint16_t &instruction)
         unsigned int last = instruction & 0x000F;
         if(last == 0)   // Screen clear
         {
-            for(int i = 0; i < 4; i++)
-            for(int j = 0; j < 8; j++)
+            for(int i = 0; i < 32; i++)
+            for(int j = 0; j < 64; j++)
                 screen[i][j] = 0x00;
+
+            PC+=2;
         }
         else if(last == 0x000E) // Return from subroutine
         {
             PC = stack[SP];
             SP--;
+            PC+=2;
         } else
             printf("Unknown instruction! %#06X\n", instruction);
     } else if(leading == 1) // Jump
@@ -108,64 +111,93 @@ void Chip8::Decode(uint16_t &instruction)
     {
         uint8_t kk = instruction & 0x00FF;
         if(registers[regX] == kk)
+            PC+=4;
+        else
             PC+=2;
     } else if(leading == 4) // Skip !=
     {
         uint8_t kk = instruction & 0x00FF;
         if(registers[regX] != kk)
+            PC+=4;
+        else
             PC+=2;
     } else if(leading == 5) // Skip == registers
     {
         if(registers[regX] == registers[regY])
+            PC+=4;
+        else
             PC+=2;
     } else if(leading == 6) // Set Vx = kk
     {
         uint8_t kk = instruction & 0x00FF;
         registers[regX] = kk;
+        PC+=2;
     } else if(leading == 7) // Vx += kk
     {
         uint8_t kk = instruction & 0x00FF;
         registers[regX] += kk;
+        PC+=2;
     } else if(leading == 8)
     {
         unsigned int subtype = instruction & 0x000F;
         if(subtype == 0)    // Vx = Vy
+        {
             registers[regX] = registers[regY];
+            PC+=2;
+        }
         else if(subtype == 1) // Vx |= Vy
+        {
             registers[regX] |= registers[regY];
+            PC+=2;
+        }
         else if(subtype == 2) // Vx &= Vy
+        {
             registers[regX] &= registers[regY];
+            PC+=2;
+        }
         else if(subtype == 3) // Vx ^= Vy
+        {
             registers[regX] ^= registers[regY];
+            PC+=2;
+        }
         else if(subtype == 4) // Vx += Vy
         {
             registers[0xF] = (registers[regX] + registers[regY] > 255);
             registers[regX] += registers[regY];
+            PC+=2;
         } else if(subtype == 5) // Vx -= Vy
         {
             registers[0xF] = registers[regX] > registers[regY];
             registers[regX] -= registers[regY];
+            PC+=2;
         } else if(subtype == 6) // SHR
         {
             registers[0xF] = ((registers[regX] & 0x01) == 1);
             registers[regX] >>= 1;
+            PC+=2;
         } else if(subtype == 7) // SUBN
         {
             registers[0xF] = (registers[regY] > registers[regX]);
             registers[regX] = registers[regY] - registers[regX];
+            PC+=2;
         } else if(subtype == 0xE)   // SHL
         {
             registers[0xF] = ((registers[regX] & 0x80) == 1);
             registers[regX] <<= 1;
+            PC+=2;
         }
     } else if(leading == 9) // Skip != registers
     {
         if(registers[regX] != registers[regY])
+            PC+=4;
+        else
             PC+=2;
     } else if(leading == 0xA) // I = nnn
     {
         uint16_t address = instruction & 0x0FFF;
         I = address;
+
+        PC+=2;
     } else if(leading == 0xB) // Jump nnn + v0
     {
         uint16_t address = instruction & 0x0FFF;
@@ -175,45 +207,53 @@ void Chip8::Decode(uint16_t &instruction)
         uint8_t random = (unsigned int)rand() % 256;
         uint8_t kk = instruction & 0x00FF;
         registers[regX] = random & kk;
+
+        PC+=2;
     } else if(leading == 0xD) // Draw
     {
-        unsigned int n = instruction & 0x000F;
+        unsigned int height = instruction & 0x000F;
 
-        uint8_t bytes[n];
-        for(uint16_t i = 0; i < n; i++)
+        uint8_t bytes[height];
+        for(unsigned i = 0; i < height; i++)
             bytes[i] = memory[i+I];
 
         uint8_t coordX = registers[regX];
         uint8_t coordY = registers[regY];
 
-        for(unsigned i = 0; i < n; i++)
+        registers[0xF] = 0;
+        for(unsigned yLine = 0; yLine < height; yLine++)
         {
-            registers[0xF] = 0;
-
-            // Check every bit in bytes (screen byte and to-be XORed byte)
-            for(int j = 0; j < 8; j++)
+            for(unsigned xLine = 0; xLine < 8; xLine++)
             {
-                uint8_t screenBit = (screen[(coordY+i) % 32][coordX % 64] & (0b00000001 << j)) >> j;
-                uint8_t xorBit = (bytes[i] % (0x00000001 << j)) >> j;
+                uint8_t screenByte = screen[(coordY + yLine) % 32][(coordX + xLine) % 64];
+                uint8_t XORByte = bytes[yLine] & (0x80 >> xLine);
 
-                if(screenBit == 1 && xorBit == 0)
+                if(screenByte != XORByte)
                 {
+                    screen[(coordY + yLine) % 32][(coordX + xLine) % 64] = 0x1;
+                } else
+                {
+                    screen[(coordY + yLine) % 32][(coordX + xLine) % 64] = 0x0;
                     registers[0xF] = 1;
-                    break;
                 }
             }
-
-            screen[(coordY+i) % 32][coordX % 64] ^= bytes[i];
         }
+
+        PC+=2;
     } else if(leading == 0xE)
     {
         if(keyboard[registers[regX]])
+            PC+=4;
+        else
             PC+=2;
     } else if(leading == 0xF)
     {
         uint8_t lastByte = instruction & 0x00FF;
         if(lastByte == 0x07)
+        {
             registers[regX] = delayTimer;
+            PC+=2;
+        }
         else if(lastByte == 0x0A)   // Wait for key press
         {
             sf::Event e;
@@ -236,32 +276,50 @@ void Chip8::Decode(uint16_t &instruction)
                     }
                 }
             }
+
+            PC+=2;
         } else if(lastByte == 0x15)
+        {
             delayTimer = registers[regX];
+            PC+=2;
+        }
         else if(lastByte == 0x18)
+        {
             soundTimer = registers[regX];
+            PC+=2;
+        }
         else if(lastByte == 0x1E)
+        {
             I += registers[regX];
+            PC+=2;
+        }
         else if(lastByte == 0x29)
+        {
             I = memory[5*registers[regX]];
+            PC+=2;
+        }
         else if(lastByte == 0x33)
         {
             unsigned int decimal = registers[regX];
             memory[I] = decimal / 100;
             memory[I+1] = decimal / 10 % 10;
             memory[I+2] = decimal % 10;
+
+            PC+=2;
         } else if(lastByte == 0x55)
         {
             for(unsigned i = 0; i <= regX; i++)
                 memory[I+i] = registers[i];
+
+            PC+=2;
         } else if(lastByte == 0x65)
         {
             for(unsigned i = 0; i <= regX; i++)
                 registers[i] = memory[I+i];
+
+            PC+=2;
         }
     }
-
-    PC+=2; // Fetch the next instruction
 }
 
 void Chip8::Iterate()
@@ -274,7 +332,7 @@ void Chip8::Iterate()
     image.create(64, 32);
     for(int i = 0; i < 32; i++)
     for(int j = 0; j < 64; j++)
-        if(screen[i][j])
+        if(screen[i][j] == 0x1)
             image.setPixel(j, i, sf::Color::White);
         else
             image.setPixel(j, i, sf::Color::Black);
@@ -283,6 +341,6 @@ void Chip8::Iterate()
     tex.loadFromImage(image);
 
     sf::Sprite spr(tex);
-    spr.scale(4.0f, 4.0f);
+    spr.scale(16.0f, 16.0f);
     window->draw(spr);
 }
