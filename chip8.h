@@ -42,6 +42,6 @@ struct Chip8
 
     Chip8(sf::RenderWindow* window, const char* gamePath);
 
-    void Decode(uint16_t& instruction);
+    void Decode(uint16_t instruction);
     void Iterate();
 };

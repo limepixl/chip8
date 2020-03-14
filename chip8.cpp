@@ -25,24 +25,27 @@ Chip8::Chip8(sf::RenderWindow* window, const char* gamePath) : window(window)
         0xF0, 0x80, 0xF0, 0x80, 0x80    // F
     };
 
-    // Initialize memory to 0
-    for(int i = 80; i < 4096; i++)
-        memory[i] = 0;
-
     // Store digits in first 80 bytes of memory
     for(int i = 0; i < 80; i++)
         memory[i] = digits[i];
+
+    // Initialize memory (after 80) to 0
+    for(int i = 80; i < 4096; i++)
+        memory[i] = 0;
 
     // Reset registers and stack
     for(int i = 0; i < 16; i++)
     {
         registers[i] = 0;
         stack[i] = 0;
+        keyboard[i] = false;
     }
 
     PC = 0x200;
     I = 0;
     SP = 0;
+    delayTimer = 0;
+    soundTimer = 0;
 
     // Clear display
     for(int i = 0; i < 32; i++)
@@ -79,7 +82,7 @@ Chip8::Chip8(sf::RenderWindow* window, const char* gamePath) : window(window)
 
 // I know, I know. Switch cases are evil.
 // But in this case, they're a bit faster!
-void Chip8::Decode(uint16_t &instruction)
+void Chip8::Decode(uint16_t instruction)
 {
     uint8_t leading = (instruction & 0xF000) >> 12;
     uint8_t regX = (instruction & 0x0F00) >> 8;
@@ -103,7 +106,7 @@ void Chip8::Decode(uint16_t &instruction)
             shouldRedraw = true;
             PC+=2;
         }
-        else if(last == 0x000E) // Return from subroutine
+        else if(last == 0xE) // Return from subroutine
         {
             PC = stack[SP];
             SP--;
@@ -192,7 +195,7 @@ void Chip8::Decode(uint16_t &instruction)
         }
         case 4: // Vx += Vy
         {
-            registers[0xF] = (registers[regX] + registers[regY] > 255);
+            registers[0xF] = ((registers[regX] + registers[regY]) > 0xFF);
             registers[regX] += registers[regY];
             PC+=2;
             break;
@@ -206,7 +209,7 @@ void Chip8::Decode(uint16_t &instruction)
         }
         case 6: // SHR
         {
-            registers[0xF] = ((registers[regX] & 0x01) == 1);
+            registers[0xF] = (registers[regX] & 0x01);
             registers[regX] >>= 1;
             PC+=2;
             break;
@@ -220,12 +223,16 @@ void Chip8::Decode(uint16_t &instruction)
         }
         case 0xE: // SHL
         {
-            registers[0xF] = ((registers[regX] & 0x80) == 1);
+            registers[0xF] = (registers[regX] & 0x80);
             registers[regX] <<= 1;
             PC+=2;
             break;
         }
+        default:
+            printf("Unknown subtype %#4X for instruction %#6X\n", subtype, instruction);
+            break;
         }
+        break;
     }
     case 9: // Skip != registers
     {
@@ -237,27 +244,25 @@ void Chip8::Decode(uint16_t &instruction)
     }
     case 0xA: // I = nnn
     {
-        uint16_t address = instruction & 0x0FFF;
         I = address;
         PC+=2;
         break;
     }
     case 0xB: // Jump nnn + v0
     {
-        uint16_t address = instruction & 0x0FFF;
         PC = registers[0] + address;
         break;
     }
     case 0xC: // rand & kk
     {
-        uint8_t random = (unsigned int)rand() % 256;
+        uint8_t random = rand() % 256;
         uint8_t kk = instruction & 0x00FF;
         registers[regX] = random & kk;
 
         PC+=2;
         break;
     }
-    case 0xD: // Draw
+    case 0xD: // Draw (POTENTALLY)
     {
         unsigned int height = instruction & 0x000F;
 
@@ -273,19 +278,20 @@ void Chip8::Decode(uint16_t &instruction)
         {
             for(unsigned xLine = 0; xLine < 8; xLine++)
             {
-                uint8_t screenByte = screen[(coordY + yLine) % 32][(coordX + xLine) % 64];
+                uint8_t screenByte = screen[(coordY + yLine) % 32][(coordX + xLine) % 64] & (0x80 >> xLine);
                 uint8_t XORByte = bytes[yLine] & (0x80 >> xLine);
 
-                if(screenByte != XORByte)
+                if(screenByte == XORByte)
                 {
-                    screen[(coordY + yLine) % 32][(coordX + xLine) % 64] = 0x1;
-                    screenImage.setPixel((coordX + xLine) % 64, (coordY + yLine) % 32, sf::Color::White);
+                    registers[0xF] = 1;
+                    screenImage.setPixel((coordX + xLine) % 64, (coordY + yLine) % 32, sf::Color::Black);
                 } else
                 {
-                    screen[(coordY + yLine) % 32][(coordX + xLine) % 64] = 0x0;
-                    screenImage.setPixel((coordX + xLine) % 64, (coordY + yLine) % 32, sf::Color::Black);
-                    registers[0xF] = 1;
+                    registers[0xF] = 0;
+                    screenImage.setPixel((coordX + xLine) % 64, (coordY + yLine) % 32, sf::Color::White);
                 }
+
+                screen[(coordY + yLine) % 32][(coordX + xLine) % 64] = screenByte ^ XORByte;
             }
         }
 
@@ -295,10 +301,21 @@ void Chip8::Decode(uint16_t &instruction)
     }
     case 0xE:
     {
-        if(keyboard[registers[regX]])
-            PC+=4;
-        else
-            PC+=2;
+        uint8_t subtype = instruction & 0x000F;
+        if(subtype == 0xE)
+        {
+            if(keyboard[registers[regX]])
+                PC+=4;
+            else
+                PC+=2;
+
+        } else if(subtype == 0x1)
+        {
+            if(!keyboard[registers[regX]])
+                PC+=4;
+            else
+                PC+=2;
+        }
         break;
     }
     case 0xF:
@@ -314,26 +331,12 @@ void Chip8::Decode(uint16_t &instruction)
         }
         case 0x0A:   // Wait for key press
         {
-            sf::Event e;
-            while(true)
-            {
-                window->pollEvent(e);
-                if(e.type == sf::Event::KeyPressed)
-                {
-                    if(e.key.code >= sf::Keyboard::A && e.key.code <= sf::Keyboard::F)
-                    {
-                        keyboard[e.key.code + 10] = true;
-                        registers[regX] = e.key.code + 10;
-                        break;
-                    }
-                    else if(e.key.code >= sf::Keyboard::Num0 && e.key.code <= sf::Keyboard::Num9)
-                    {
-                        keyboard[e.key.code - 26] = true;
-                        registers[regX] = e.key.code - 26;
-                        break;
-                    }
-                }
-            }
+            bool pressed = false;
+            for(int i = 0; i < 16; i++)
+                pressed &= keyboard[i];
+
+            if(!pressed)
+                return;
 
             PC+=2;
             break;
@@ -352,13 +355,14 @@ void Chip8::Decode(uint16_t &instruction)
         }
         case 0x1E:
         {
+            registers[0xF] = (I + registers[regX] > 0xFFF);
             I += registers[regX];
             PC+=2;
             break;
         }
         case 0x29:
         {
-            I = memory[5*registers[regX]];
+            I = registers[regX]*5;
             PC+=2;
             break;
         }
@@ -366,7 +370,7 @@ void Chip8::Decode(uint16_t &instruction)
         {
             unsigned int decimal = registers[regX];
             memory[I] = decimal / 100;
-            memory[I+1] = decimal / 10 % 10;
+            memory[I+1] = (decimal / 10) % 10;
             memory[I+2] = decimal % 10;
 
             PC+=2;
@@ -391,6 +395,8 @@ void Chip8::Decode(uint16_t &instruction)
         }
         break;
     }
+    default:
+        printf("Unknown instruction: %#6X\n", instruction);
     }
 }
 
@@ -400,6 +406,27 @@ void Chip8::Iterate()
 
     printf("Instruction: %#6X\n", instruction);
     Decode(instruction);
+
+    // Update keys
+    for(int i = 0; i < 16; i++)
+        keyboard[i] = false;
+    sf::Event e;
+    while(window->pollEvent(e))
+    {
+        if(e.type == sf::Event::KeyPressed)
+        {
+            if(e.key.code >= sf::Keyboard::A && e.key.code <= sf::Keyboard::F)
+                keyboard[e.key.code + 10] = true;
+            else if(e.key.code >= sf::Keyboard::Num0 && e.key.code <= sf::Keyboard::Num9)
+                keyboard[e.key.code - 26] = true;
+        } else if(e.type == sf::Event::KeyReleased)
+        {
+            if(e.key.code >= sf::Keyboard::A && e.key.code <= sf::Keyboard::F)
+                keyboard[e.key.code + 10] = false;
+            else if(e.key.code >= sf::Keyboard::Num0 && e.key.code <= sf::Keyboard::Num9)
+                keyboard[e.key.code - 26] = false;
+        }
+    }
 
     // Transfer screen to SFML screen
     if(shouldRedraw)
@@ -414,4 +441,8 @@ void Chip8::Iterate()
         window->draw(sprite);
         window->display();
     }
+
+    // Update timers
+    delayTimer -= (delayTimer > 0);
+    soundTimer -= (soundTimer > 0);
 }
