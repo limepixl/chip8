@@ -64,14 +64,17 @@ Chip8::Chip8(sf::RenderWindow* window, const char* gamePath) : window(window)
     unsigned long size = ftell(game);
     rewind(game);
 
-
     uint8_t buffer[size];
-    fread(buffer, 1, size, game);
+    unsigned long res = fread(buffer, 1, size, game);
+    if(res != size)
+        exit(-1);
     fclose(game);
 
     // Store game into memory
-    for(int i = 0; i < size; i++)
+    for(unsigned i = 0; i < size; i++)
         memory[i + 0x200] = (uint8_t)buffer[i];
+
+    screenImage.create(64, 32);
 }
 
 // TODO: Possibly move to switch case
@@ -87,8 +90,12 @@ void Chip8::Decode(uint16_t &instruction)
         {
             for(int i = 0; i < 32; i++)
             for(int j = 0; j < 64; j++)
+            {
                 screen[i][j] = 0x00;
+                screenImage.setPixel(j, i, sf::Color::Black);
+            }
 
+            shouldRedraw = true;
             PC+=2;
         }
         else if(last == 0x000E) // Return from subroutine
@@ -231,14 +238,17 @@ void Chip8::Decode(uint16_t &instruction)
                 if(screenByte != XORByte)
                 {
                     screen[(coordY + yLine) % 32][(coordX + xLine) % 64] = 0x1;
+                    screenImage.setPixel((coordX + xLine) % 64, (coordY + yLine) % 32, sf::Color::White);
                 } else
                 {
                     screen[(coordY + yLine) % 32][(coordX + xLine) % 64] = 0x0;
+                    screenImage.setPixel((coordX + xLine) % 64, (coordY + yLine) % 32, sf::Color::Black);
                     registers[0xF] = 1;
                 }
             }
         }
 
+        shouldRedraw = true;
         PC+=2;
     } else if(leading == 0xE)
     {
@@ -325,22 +335,21 @@ void Chip8::Decode(uint16_t &instruction)
 void Chip8::Iterate()
 {
     uint16_t instruction = memory[PC] << 8 | memory[PC+1];
+
+    //printf("Decoding instruction: %#6X\n", instruction);
     Decode(instruction);
 
     // Transfer screen to SFML screen
-    sf::Image image;
-    image.create(64, 32);
-    for(int i = 0; i < 32; i++)
-    for(int j = 0; j < 64; j++)
-        if(screen[i][j] == 0x1)
-            image.setPixel(j, i, sf::Color::White);
-        else
-            image.setPixel(j, i, sf::Color::Black);
+    if(shouldRedraw)
+    {
+        shouldRedraw = false;
 
-    sf::Texture tex;
-    tex.loadFromImage(image);
+        tex.loadFromImage(screenImage);
+        sf::Sprite sprite(tex);
+        sprite.scale(16.0f, 16.0f);
 
-    sf::Sprite spr(tex);
-    spr.scale(16.0f, 16.0f);
-    window->draw(spr);
+        window->clear();
+        window->draw(sprite);
+        window->display();
+    }
 }

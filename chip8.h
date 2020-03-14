@@ -4,10 +4,9 @@
 
 struct Chip8
 {
-    sf::RenderWindow* window;
-
     // Monochrome 64x32 screen
     uint8_t screen[32][64];
+    bool shouldRedraw = false;
 
     // 0x000 to 0xFFF
     // Non-interpreter memory starts at 0x200
@@ -34,6 +33,12 @@ struct Chip8
 
     // Keyboard values (0, 1, 2, .., E, F)
     bool keyboard[16];
+
+    // SFML related things
+    sf::RenderWindow* window;
+    sf::Image screenImage;
+    sf::Texture tex;
+    sf::Sprite spr;
 
     Chip8(sf::RenderWindow* window, const char* gamePath);
 

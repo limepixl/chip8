@@ -5,7 +5,7 @@ int main()
     sf::RenderWindow window(sf::VideoMode(1024, 512, 8), "Chip8");
     window.setFramerateLimit(60);
 
-    Chip8 chip8(&window, "../chip8/Chip8-Games/Maze1.ch8");
+    Chip8 chip8(&window, "../chip8/Chip8-Games/TICTAC");
 
     while(window.isOpen())
     {
@@ -16,9 +16,7 @@ int main()
                 window.close();
         }
 
-        window.clear();
         chip8.Iterate();
-        window.display();
     }
 
     return 0;
