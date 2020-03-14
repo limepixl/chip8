@@ -179,21 +179,29 @@ void Chip8::Decode(uint16_t &instruction)
     {
         unsigned int n = instruction & 0x000F;
 
-        int bCount = 0;
         uint8_t bytes[n];
-        for(uint16_t i = I; i < n; i++)
-            bytes[bCount++] = memory[i];
+        for(uint16_t i = 0; i < n; i++)
+            bytes[i] = memory[i+I];
 
         uint8_t coordX = registers[regX];
         uint8_t coordY = registers[regY];
 
         for(unsigned i = 0; i < n; i++)
         {
-            // TODO: Find another way to check if bit flipped from 1 to 0
+            registers[0xF] = 0;
 
+            // Check every bit in bytes (screen byte and to-be XORed byte)
             for(int j = 0; j < 8; j++)
-                if((screen[(coordY+j) % 32][coordX % 64] & (unsigned char)pow(2, j)) && !((screen[(coordY+j) % 32][coordX]^bytes[j % 64]) & (unsigned char)pow(2, j)))
-                    registers[0xF] |= 1;
+            {
+                uint8_t screenBit = (screen[(coordY+i) % 32][coordX % 64] & (0b00000001 << j)) >> j;
+                uint8_t xorBit = (bytes[i] % (0x00000001 << j)) >> j;
+
+                if(screenBit == 1 && xorBit == 0)
+                {
+                    registers[0xF] = 1;
+                    break;
+                }
+            }
 
             screen[(coordY+i) % 32][coordX % 64] ^= bytes[i];
         }
