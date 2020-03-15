@@ -5,7 +5,7 @@ int main()
     sf::RenderWindow window(sf::VideoMode(1024, 512, 8), "Chip8");
     window.setFramerateLimit(60);
 
-    Chip8 chip8(&window, "../chip8/Chip8-Games/TETRIS");
+    Chip8 chip8(&window, "../chip8/Chip8-Games/PONG");
 
     while(window.isOpen())
     {

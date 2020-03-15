@@ -262,7 +262,7 @@ void Chip8::Decode(uint16_t instruction)
         PC+=2;
         break;
     }
-    case 0xD: // Draw (POTENTALLY)
+    case 0xD: // Draw
     {
         unsigned int height = instruction & 0x000F;
 
@@ -278,20 +278,21 @@ void Chip8::Decode(uint16_t instruction)
         {
             for(unsigned xLine = 0; xLine < 8; xLine++)
             {
-                uint8_t screenByte = screen[(coordY + yLine) % 32][(coordX + xLine) % 64] & (0x80 >> xLine);
+                uint8_t screenByte = screen[(coordY + yLine) % 32][(coordX + xLine) % 64];
                 uint8_t XORByte = bytes[yLine] & (0x80 >> xLine);
 
-                if(screenByte == XORByte)
+                // TODO: Collision not working
+                // If bit was white but got flipped, collision
+                registers[0xF] = !(screenByte ^ XORByte);
+                if(screenByte ^ XORByte)
                 {
-                    registers[0xF] = 1;
-                    screenImage.setPixel((coordX + xLine) % 64, (coordY + yLine) % 32, sf::Color::Black);
+                    screenImage.setPixel((coordX + xLine) % 64, (coordY + yLine) % 32, sf::Color::White);
                 } else
                 {
-                    registers[0xF] = 0;
-                    screenImage.setPixel((coordX + xLine) % 64, (coordY + yLine) % 32, sf::Color::White);
+                    screenImage.setPixel((coordX + xLine) % 64, (coordY + yLine) % 32, sf::Color::Black);
                 }
 
-                screen[(coordY + yLine) % 32][(coordX + xLine) % 64] = screenByte ^ XORByte;
+                screen[(coordY + yLine) % 32][(coordX + xLine) % 64] = (screenByte ^ XORByte);
             }
         }
 
@@ -407,6 +408,7 @@ void Chip8::Iterate()
     printf("Instruction: %#6X\n", instruction);
     Decode(instruction);
 
+    // TODO: Not working!
     // Update keys
     for(int i = 0; i < 16; i++)
         keyboard[i] = false;
