@@ -281,16 +281,12 @@ void Chip8::Decode(uint16_t instruction)
                 uint8_t screenByte = screen[(coordY + yLine) % 32][(coordX + xLine) % 64];
                 uint8_t XORByte = bytes[yLine] & (0x80 >> xLine);
 
-                // TODO: Collision not working
                 // If bit was white but got flipped, collision
-                registers[0xF] = !(screenByte ^ XORByte);
+                registers[0xF] |= screenByte && XORByte;
                 if(screenByte ^ XORByte)
-                {
                     screenImage.setPixel((coordX + xLine) % 64, (coordY + yLine) % 32, sf::Color::White);
-                } else
-                {
+                else
                     screenImage.setPixel((coordX + xLine) % 64, (coordY + yLine) % 32, sf::Color::Black);
-                }
 
                 screen[(coordY + yLine) % 32][(coordX + xLine) % 64] = (screenByte ^ XORByte);
             }
@@ -431,6 +427,7 @@ void Chip8::Iterate()
     }
 
     // Transfer screen to SFML screen
+    // TODO: SFML texture updating is slow
     if(shouldRedraw)
     {
         shouldRedraw = false;
