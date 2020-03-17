@@ -402,12 +402,6 @@ void Chip8::Iterate()
     uint16_t instruction = memory[PC] << 8 | memory[PC+1];
     Decode(instruction);
 
-    // Update keys
-    for(int i = 0; i < 16; i++)
-    {
-        keyboard[i] = false;
-    }
-
     // Transfer screen to SFML screen
     // TODO: SFML texture updating is slow
     if(shouldRedraw)

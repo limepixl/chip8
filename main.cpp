@@ -1,4 +1,5 @@
 #include "chip8.h"
+#include <unordered_map>
 
 int main()
 {
@@ -6,6 +7,26 @@ int main()
     window.setFramerateLimit(60);
 
     Chip8 chip8(&window, "../chip8/Chip8-Games/PONG");
+
+    std::unordered_map<sf::Keyboard::Key, int> keymap
+    {
+        {sf::Keyboard::Num1, 0},
+        {sf::Keyboard::Num2, 1},
+        {sf::Keyboard::Num3, 2},
+        {sf::Keyboard::Num4, 3},
+        {sf::Keyboard::Q, 4},
+        {sf::Keyboard::W, 5},
+        {sf::Keyboard::E, 6},
+        {sf::Keyboard::R, 7},
+        {sf::Keyboard::A, 8},
+        {sf::Keyboard::S, 9},
+        {sf::Keyboard::D, 10},
+        {sf::Keyboard::F, 11},
+        {sf::Keyboard::Z, 12},
+        {sf::Keyboard::X, 13},
+        {sf::Keyboard::C, 14},
+        {sf::Keyboard::V, 15}
+    };
 
     while(window.isOpen())
     {
@@ -16,98 +37,9 @@ int main()
                 window.close();
 
             if(e.type == sf::Event::KeyPressed)
-            {
-                if(e.key.code >= sf::Keyboard::A && e.key.code <= sf::Keyboard::F)
-                switch(e.key.code)
-                {
-                case sf::Keyboard::A:
-                    chip8.keyboard[12] = true;
-                    break;
-                case sf::Keyboard::B:
-                    chip8.keyboard[14] = true;
-                    break;
-                case sf::Keyboard::C:
-                    chip8.keyboard[3] = true;
-                    break;
-                case sf::Keyboard::D:
-                    chip8.keyboard[7] = true;
-                    break;
-                case sf::Keyboard::E:
-                    chip8.keyboard[11] = true;
-                    break;
-                case sf::Keyboard::F:
-                    chip8.keyboard[15] = true;
-                    break;
-                }
-                else if(e.key.code >= sf::Keyboard::Num0 && e.key.code <= sf::Keyboard::Num9)
-                switch(e.key.code)
-                {
-                case sf::Keyboard::Num0:
-                    chip8.keyboard[13] = true;
-                    break;
-                case sf::Keyboard::Num1:
-                case sf::Keyboard::Num2:
-                case sf::Keyboard::Num3:
-                    chip8.keyboard[e.key.code - 26 - 1] = true;
-                    break;
-                case sf::Keyboard::Num4:
-                case sf::Keyboard::Num5:
-                case sf::Keyboard::Num6:
-                    chip8.keyboard[e.key.code - 26] = true;
-                    break;
-                case sf::Keyboard::Num7:
-                case sf::Keyboard::Num8:
-                case sf::Keyboard::Num9:
-                    chip8.keyboard[e.key.code - 26 + 1] = true;
-                    break;
-                }
-            } else if(e.type == sf::Event::KeyReleased)
-            {
-                if(e.key.code >= sf::Keyboard::A && e.key.code <= sf::Keyboard::F)
-                switch(e.key.code)
-                {
-                case sf::Keyboard::A:
-                    chip8.keyboard[12] = false;
-                    break;
-                case sf::Keyboard::B:
-                    chip8.keyboard[14] = false;
-                    break;
-                case sf::Keyboard::C:
-                    chip8.keyboard[3] = false;
-                    break;
-                case sf::Keyboard::D:
-                    chip8.keyboard[7] = false;
-                    break;
-                case sf::Keyboard::E:
-                    chip8.keyboard[11] = false;
-                    break;
-                case sf::Keyboard::F:
-                    chip8.keyboard[15] = false;
-                    break;
-                }
-                else if(e.key.code >= sf::Keyboard::Num0 && e.key.code <= sf::Keyboard::Num9)
-                switch(e.key.code)
-                {
-                case sf::Keyboard::Num0:
-                    chip8.keyboard[13] = false;
-                    break;
-                case sf::Keyboard::Num1:
-                case sf::Keyboard::Num2:
-                case sf::Keyboard::Num3:
-                    chip8.keyboard[e.key.code - 26 - 1] = false;
-                    break;
-                case sf::Keyboard::Num4:
-                case sf::Keyboard::Num5:
-                case sf::Keyboard::Num6:
-                    chip8.keyboard[e.key.code - 26] = false;
-                    break;
-                case sf::Keyboard::Num7:
-                case sf::Keyboard::Num8:
-                case sf::Keyboard::Num9:
-                    chip8.keyboard[e.key.code - 26 + 1] = false;
-                    break;
-                }
-            }
+                chip8.keyboard[keymap[e.key.code]] = true;
+            else if(e.type == sf::Event::KeyReleased)
+                chip8.keyboard[keymap[e.key.code]] = false;
         }
 
         chip8.Iterate();
