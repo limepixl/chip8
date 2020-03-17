@@ -400,30 +400,12 @@ void Chip8::Decode(uint16_t instruction)
 void Chip8::Iterate()
 {
     uint16_t instruction = memory[PC] << 8 | memory[PC+1];
-
-    printf("Instruction: %#6X\n", instruction);
     Decode(instruction);
 
-    // TODO: Not working!
     // Update keys
     for(int i = 0; i < 16; i++)
-        keyboard[i] = false;
-    sf::Event e;
-    while(window->pollEvent(e))
     {
-        if(e.type == sf::Event::KeyPressed)
-        {
-            if(e.key.code >= sf::Keyboard::A && e.key.code <= sf::Keyboard::F)
-                keyboard[e.key.code + 10] = true;
-            else if(e.key.code >= sf::Keyboard::Num0 && e.key.code <= sf::Keyboard::Num9)
-                keyboard[e.key.code - 26] = true;
-        } else if(e.type == sf::Event::KeyReleased)
-        {
-            if(e.key.code >= sf::Keyboard::A && e.key.code <= sf::Keyboard::F)
-                keyboard[e.key.code + 10] = false;
-            else if(e.key.code >= sf::Keyboard::Num0 && e.key.code <= sf::Keyboard::Num9)
-                keyboard[e.key.code - 26] = false;
-        }
+        keyboard[i] = false;
     }
 
     // Transfer screen to SFML screen
