@@ -63,6 +63,7 @@ Chip8::Chip8(sf::RenderWindow* window, const char* gamePath) : window(window)
         exit(-1);
     }
 
+    // Doesn't work on Windows :(
     fseek(game, 0L, SEEK_END);
     unsigned long size = ftell(game);
     rewind(game);
@@ -330,7 +331,7 @@ void Chip8::Decode(uint16_t instruction)
         {
             bool pressed = false;
             for(int i = 0; i < 16; i++)
-                pressed &= keyboard[i];
+                pressed |= keyboard[i];
 
             if(!pressed)
                 return;
@@ -352,7 +353,7 @@ void Chip8::Decode(uint16_t instruction)
         }
         case 0x1E:
         {
-            registers[0xF] = (I + registers[regX] > 0xFFF);
+            registers[0xF] = ((I + registers[regX]) > 0xFFF);
             I += registers[regX];
             PC+=2;
             break;
@@ -401,6 +402,7 @@ void Chip8::Iterate()
 {
     uint16_t instruction = memory[PC] << 8 | memory[PC+1];
     Decode(instruction);
+    printf("Decoding instruction: %#6X\n", instruction);
 
     // Transfer screen to SFML screen
     // TODO: SFML texture updating is slow
