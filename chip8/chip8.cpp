@@ -2,6 +2,9 @@
 #include <cstdio>
 #include <ctime>
 #include <cmath>
+#include <fstream>
+#include <sstream>
+#include <string>
 
 Chip8::Chip8(sf::RenderWindow* window, const char* gamePath) : window(window)
 {
@@ -53,30 +56,25 @@ Chip8::Chip8(sf::RenderWindow* window, const char* gamePath) : window(window)
         screen[i][j] = 0;
 
     // Seed random number generation
-    srand(time(nullptr));
+    srand((unsigned int)time(nullptr));
 
     // Load game from file
-    FILE* game = fopen(gamePath, "rb");
-    if(game == nullptr)
+    std::ifstream game(gamePath, std::ios::binary);
+    if (!game.is_open())
     {
         printf("Failed to load game from file!");
         exit(-1);
     }
 
-    // Doesn't work on Windows :(
-    fseek(game, 0L, SEEK_END);
-    unsigned long size = ftell(game);
-    rewind(game);
+    std::stringstream gameStream;
+    gameStream << game.rdbuf();
 
-    uint8_t buffer[size];
-    unsigned long res = fread(buffer, 1, size, game);
-    if(res != size)
-        exit(-1);
-    fclose(game);
+    std::string gameString = gameStream.str();
+    const char* gameSource = gameString.c_str();
 
     // Store game into memory
-    for(unsigned i = 0; i < size; i++)
-        memory[i + 0x200] = (uint8_t)buffer[i];
+    for(unsigned i = 0; i < gameString.size(); i++)
+        memory[i + 0x200] = (uint8_t)(gameString[i]);
 
     screenImage.create(64, 32);
 }
@@ -267,7 +265,7 @@ void Chip8::Decode(uint16_t instruction)
     {
         unsigned int height = instruction & 0x000F;
 
-        uint8_t bytes[height];
+        uint8_t* bytes = new uint8_t[height];
         for(unsigned i = 0; i < height; i++)
             bytes[i] = memory[i+I];
 
@@ -295,6 +293,7 @@ void Chip8::Decode(uint16_t instruction)
 
         shouldRedraw = true;
         PC+=2;
+        delete[] bytes;
         break;
     }
     case 0xE:

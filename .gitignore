@@ -70,4 +70,5 @@ Thumbs.db
 # --------
 *.dll
 *.exe
-
+x64
+.vs
