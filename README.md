@@ -1,5 +1,8 @@
 # chip8
-A Chip8 emulator written in C++. WORK IN PROGRESS
+A Chip8 emulator written in C++. 
+
+WORK IN PROGRESS
+
 Most games work fine, like PONG and TETRIS, but there are a few that don't work correctly like TICTAC.
 
 Keymap:
