@@ -4,9 +4,9 @@
 #include <cmath>
 #include <fstream>
 #include <sstream>
-#include <string>
+#include <vector>
 
-Chip8::Chip8(sf::RenderWindow* window, const char* gamePath) : window(window)
+Chip8::Chip8(sf::RenderWindow* window, const char* gamePath)
 {
     // Hexadecimal digits in interpreter memory 5*8 (5B)
     uint8_t digits[] = {
@@ -68,15 +68,14 @@ Chip8::Chip8(sf::RenderWindow* window, const char* gamePath) : window(window)
 
     std::stringstream gameStream;
     gameStream << game.rdbuf();
-
     std::string gameString = gameStream.str();
-    const char* gameSource = gameString.c_str();
 
     // Store game into memory
     for(unsigned i = 0; i < gameString.size(); i++)
         memory[i + 0x200] = (uint8_t)(gameString[i]);
 
     screenImage.create(64, 32);
+    this->window = window;
 }
 
 // I know, I know. Switch cases are evil.
@@ -127,26 +126,27 @@ void Chip8::Decode(uint16_t instruction)
     {
         uint8_t kk = instruction & 0x00FF;
         if(registers[regX] == kk)
-            PC+=4;
-        else
             PC+=2;
+        
+        PC+=2;
         break;
     }
     case 4: // Skip !=
     {
         uint8_t kk = instruction & 0x00FF;
         if(registers[regX] != kk)
-            PC+=4;
-        else
             PC+=2;
+
+        PC+=2;
         break;
     }
     case 5: // Skip == registers
     {
         if(registers[regX] == registers[regY])
-            PC+=4;
-        else
-            PC+=2;
+            PC += 2;
+
+        PC += 2;
+        break;
         break;
     }
     case 6: // Set Vx = kk
@@ -236,9 +236,10 @@ void Chip8::Decode(uint16_t instruction)
     case 9: // Skip != registers
     {
         if(registers[regX] != registers[regY])
-            PC+=4;
-        else
-            PC+=2;
+            PC += 2;
+
+        PC += 2;
+        break;
         break;
     }
     case 0xA: // I = nnn
@@ -265,7 +266,7 @@ void Chip8::Decode(uint16_t instruction)
     {
         unsigned int height = instruction & 0x000F;
 
-        uint8_t* bytes = new uint8_t[height];
+        std::vector<uint8_t> bytes(height);
         for(unsigned i = 0; i < height; i++)
             bytes[i] = memory[i+I];
 
@@ -293,7 +294,6 @@ void Chip8::Decode(uint16_t instruction)
 
         shouldRedraw = true;
         PC+=2;
-        delete[] bytes;
         break;
     }
     case 0xE:
@@ -302,16 +302,18 @@ void Chip8::Decode(uint16_t instruction)
         if(subtype == 0xE)
         {
             if(keyboard[registers[regX]])
-                PC+=4;
-            else
-                PC+=2;
+                PC += 2;
+
+            PC += 2;
+            break;
 
         } else if(subtype == 0x1)
         {
             if(!keyboard[registers[regX]])
-                PC+=4;
-            else
-                PC+=2;
+                PC += 2;
+
+            PC += 2;
+            break;
         }
         break;
     }
@@ -401,10 +403,9 @@ void Chip8::Iterate()
 {
     uint16_t instruction = memory[PC] << 8 | memory[PC+1];
     Decode(instruction);
-    printf("Decoding instruction: %#6X\n", instruction);
+    //printf("Decoding instruction: %#6X\n", instruction);
 
     // Transfer screen to SFML screen
-    // TODO: SFML texture updating is slow
     if(shouldRedraw)
     {
         shouldRedraw = false;
