@@ -6,7 +6,11 @@ int main()
     sf::RenderWindow window(sf::VideoMode(1024, 512, 8), "Chip8");
     window.setFramerateLimit(120);
 
-    Chip8 chip8(&window, "Chip8-Games/PONG");
+#ifdef _WIN32
+    Chip8 chip8(&window, "../../../Chip8-Games/PONG");
+#else
+    Chip8 chip8(&window, "../Chip8-Games/PONG");
+#endif
 
     std::unordered_map<sf::Keyboard::Key, int> keymap
     {
