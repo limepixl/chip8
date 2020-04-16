@@ -9,7 +9,7 @@ int main()
 #ifdef _WIN32
     Chip8 chip8(&window, "../../../Chip8-Games/PONG");
 #else
-    Chip8 chip8(&window, "../Chip8-Games/PONG");
+    Chip8 chip8(&window, "../chip8/Chip8-Games/PONG");
 #endif
 
     std::unordered_map<sf::Keyboard::Key, int> keymap
